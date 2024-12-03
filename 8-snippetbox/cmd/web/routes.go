@@ -41,7 +41,7 @@ func (app *application) routes() http.Handler {
 
 	  It’s important to know that when the last handler in the chain returns, control is passed back up the chain in the reverse direction. So when our code is being executed the flow of control actually looks like this:
 
-	  commonHeaders → servemux → application handler → servemux → commonHeaders
+	  recoverPanic → logRequest → commonHeaders → servemux → application handler → servemux → commonHeaders → logRequest → recoverPanic
 	*/
-	return commonHeaders(mux)
+	return app.recoverPanic(app.logRequest(commonHeaders(mux)))
 }

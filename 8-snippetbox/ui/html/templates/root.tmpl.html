@@ -29,7 +29,13 @@
     <!-- invote the nav template -->
     {{template "nav" .}}
 
-    <main>{{template "main" .}}</main>
+    <main>
+      {{ with .FlashMessage }}
+        <div class="flash">{{.}}</div>
+      {{end}}
+
+      {{template "main" .}}
+    </main>
 
     <footer>Powered by <a href="https://golang.org/">Go</a> in {{.CurrentYear}}</footer>
 

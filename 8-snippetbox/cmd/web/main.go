@@ -7,16 +7,22 @@ import (
 	"net/http"
 	"os"
 	"text/template"
+	"time"
 
+	"github.com/alexedwards/scs/pgxstore"
+	"github.com/alexedwards/scs/v2"
+	"github.com/go-playground/form/v4"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/marlonmarcello/learning-go/8-snippetbox/internal/models"
 )
 
 // application struct will hold application-wide dependencies for the web application.
 type application struct {
-	logger        *slog.Logger
-	snippets      *models.SnippetModel
-	templateCache map[string]*template.Template
+	logger         *slog.Logger
+	snippets       *models.SnippetModel
+	templateCache  map[string]*template.Template
+	formDecoder    *form.Decoder
+	sessionManager *scs.SessionManager
 }
 
 /*
@@ -26,6 +32,16 @@ type application struct {
   - mux.HandleFunc is just syntatic sugar that transforms a function into a Handler by calling the passed function as the ServeHTTP method so we don't have to declare a struct just to conform to the interface
   - notice how we use mux.Handle for the static/ file server, it's because http.FileServer is already a Handler
   - you can chain handlers, which is the default http mux do
+*/
+
+/*
+Advanced article on interfaces.
+https://jordanorelli.com/post/32665860244/how-to-use-interfaces-in-go
+- interfaces area also a type, so you can create an array of interfaces for example but the implementations are different
+
+The Interfaces section of the Effective Go docs is good:
+https://go.dev/doc/effective_go#interfaces
+-
 */
 
 func main() {
@@ -66,6 +82,10 @@ func main() {
 		os.Exit(1)
 	}
 
+	sessionManager := scs.New()
+	sessionManager.Store = pgxstore.New(db)
+	sessionManager.Lifetime = 12 * time.Hour
+
 	// defer the db connection close so it runs before the end of main()
 	defer db.Close()
 
@@ -76,21 +96,38 @@ func main() {
 		os.Exit(1)
 	}
 
+	formDecoder := form.NewDecoder()
+
 	// initialize application with all dependencies
 	app := &application{
-		logger:        logger,
-		snippets:      &models.SnippetModel{DB: db, CTX: ctx},
-		templateCache: templateCache,
+		logger:         logger,
+		snippets:       &models.SnippetModel{DB: db, CTX: ctx},
+		templateCache:  templateCache,
+		formDecoder:    formDecoder,
+		sessionManager: sessionManager,
 	}
 
-	logger.Info("starting server", "addr", *addr)
+	srv := &http.Server{
+		Addr:    *addr,
+		Handler: app.routes(),
+		/*
+			It’s important to be aware that Go’s http.Server may write its own log entries relating to things like unrecovered panics, or problems accepting or writing to HTTP connections.
+
+			By default, it writes these entries using the standard logger — which means they will be written to the standard error stream (instead of standard out like our other log entries), and they won’t be in the same format as the rest of our nice structured log entries.
+		*/
+		ErrorLog: slog.NewLogLogger(logger.Handler(), slog.LevelError),
+	}
+
+	logger.Info("starting server", "addr", srv.Addr)
 
 	/*
-	  You can think of a Go web application as a chain of ServeHTTP() methods being called one after another.
+	   You can think of a Go web application as a chain of ServeHTTP() methods being called one after another.
 
-	  When our server receives a new HTTP request it calls the servemux’s ServeHTTP() method. This looks up the relevant handler based on the request method and URL path, and in turn calls that handler’s ServeHTTP() method.
+	   When our server receives a new HTTP request it calls the servemux’s ServeHTTP() method. This looks up the relevant handler based on the request method and URL path, and in turn calls that handler’s ServeHTTP() method.
+
+	   https://fideloper.com/golang-http-handlers
 	*/
-	err = http.ListenAndServe(*addr, app.routes())
+	err = srv.ListenAndServe()
 	logger.Error(err.Error())
 	os.Exit(1)
 }

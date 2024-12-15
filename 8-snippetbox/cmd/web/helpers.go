@@ -2,16 +2,20 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"net/http"
 	"runtime/debug"
 	"strings"
 	"time"
+
+	"github.com/go-playground/form/v4"
 )
 
 type rootTemplateData struct {
-	CurrentYear int
-	PageData    any
+	CurrentYear  int
+	FlashMessage string
+	PageData     any
 }
 
 // The serverError helper writes a log entry at Error level (including the request method and URI as attributes), then sends a generic 500 Internal Server Error response to the user.
@@ -50,6 +54,9 @@ func (app *application) render(w http.ResponseWriter, r *http.Request, status in
 		return
 	}
 
+	/*
+	  If you don’t call w.WriteHeader() explicitly, then the first call to w.Write() will automatically send a 200 status code to the user. So, if you want to send a non-200 status code, you must call w.WriteHeader() before any call to w.Write().
+	*/
 	// okay, now that we are clear of template errors, we write the status
 	w.WriteHeader(status)
 
@@ -57,10 +64,11 @@ func (app *application) render(w http.ResponseWriter, r *http.Request, status in
 	buff.WriteTo(w)
 }
 
-func newTemplateData[T any](x T) rootTemplateData {
+func (app *application) newTemplateData(r *http.Request, x any) rootTemplateData {
 	return rootTemplateData{
-		CurrentYear: time.Now().Year(),
-		PageData:    x,
+		CurrentYear:  time.Now().Year(),
+		FlashMessage: app.sessionManager.PopString(r.Context(), "flash"),
+		PageData:     x,
 	}
 }
 
@@ -74,4 +82,36 @@ func noIndexing(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (app *application) decodePostForm(r *http.Request, destination any) error {
+	/*
+	   First we call r.ParseForm() which adds any data in POST request bodies to the r.PostForm map. This also works in the same way for PUT and PATCH requests.
+
+	   ParseForm is safe to be called multiple times per request
+	*/
+	err := r.ParseForm()
+	if err != nil {
+		return err
+	}
+
+	/*
+	  Chapter 7.2 has more information on how to use different types  of data with PostForm.Get(), like multiple checkboxes and multipart form data
+	*/
+
+	err = app.formDecoder.Decode(destination, r.PostForm)
+	if err != nil {
+		/*
+		   If we try to use an invalid target destination, the Decode() method will return an error with the type *form.InvalidDecoderError.We use errors.As() to check for this and raise a panic rather than returning the error.
+		*/
+		var invalidDecoder *form.InvalidDecoderError
+
+		if errors.As(err, &invalidDecoder) {
+			panic(err)
+		}
+
+		return err
+	}
+
+	return nil
 }

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/marlonmarcello/learning-go/8-snippetbox/internal/models"
+	"github.com/marlonmarcello/learning-go/8-snippetbox/internal/validator"
 )
 
 type snippetViewTemplateData struct {
@@ -14,6 +15,19 @@ type snippetViewTemplateData struct {
 
 type homeTemplateData struct {
 	Snippets []models.Snippet
+}
+
+/*
+Struct tags tell the decoder how to map HTML form values into the different struct fields. So, for example, here we're telling the decoder to store the value from the HTML form input with the name "title" in the Title field. The struct tag `form:"-"` tells the decoder to completely ignore a field during decoding.
+*/
+type snippetCreateTemplateData struct {
+	Title   string `form:"title"`
+	Content string `form:"content"`
+	Expires int    `form:"expires"`
+
+	// learn more about type embedding
+	// https://eli.thegreenplace.net/2020/embedding-in-go-part-1-structs-in-structs/
+	validator.Validator `form:"-"`
 }
 
 // template functions can take as many arguments as they need but MUST return a single value, UNLESS the second value is an error

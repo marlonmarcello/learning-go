@@ -3,7 +3,45 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"time"
 )
+
+/*
+This is similar to the Alice package used on the course.
+
+I wanted to try to implement something myself and I did a few iterations of this, and ended up learning quite a bit about Interface vs Concrete Types and how that's handled as parameters.
+*/
+type Middleware func(http.Handler) http.Handler
+
+type MiddlewareChain struct {
+	handlers []Middleware
+}
+
+func (m *MiddlewareChain) Append(handlers ...Middleware) {
+	if m.handlers != nil {
+		m.handlers = append(m.handlers, handlers...)
+	} else {
+		m.handlers = handlers
+	}
+}
+
+func (m *MiddlewareChain) Then(next http.Handler) http.Handler {
+	total := len(m.handlers)
+
+	if total == 0 {
+		return next
+	}
+
+	for i := total - 1; i >= 0; i-- {
+		next = m.handlers[i](next)
+	}
+
+	return next
+}
+
+func (m *MiddlewareChain) ThenFunc(h http.HandlerFunc) http.Handler {
+	return m.Then(h)
+}
 
 /*
   In any middleware handler, code which comes before next.ServeHTTP() will be executed on the way down the chain, and any code after next.ServeHTTP() — or in a deferred function — will be executed on the way back up.
@@ -32,18 +70,34 @@ func commonHeaders(next http.Handler) http.Handler {
 	})
 }
 
+type wrappedWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (w *wrappedWriter) WriteHeader(statusCode int) {
+	w.ResponseWriter.WriteHeader(statusCode)
+	w.statusCode = statusCode
+}
+
 func (app *application) logRequest(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var (
+			start  = time.Now()
 			ip     = r.RemoteAddr
 			proto  = r.Proto
 			method = r.Method
 			uri    = r.URL.RequestURI()
 		)
 
-		app.logger.Info("Request", "ip", ip, "proto", proto, "method", method, "uri", uri)
+		wrapped := &wrappedWriter{
+			ResponseWriter: w,
+			statusCode:     http.StatusOK,
+		}
 
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(wrapped, r)
+
+		app.logger.Info("Request", "status", wrapped.statusCode, "ip", ip, "proto", proto, "method", method, "uri", uri, "time", time.Since(start))
 	})
 }
 

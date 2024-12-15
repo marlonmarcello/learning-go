@@ -17,6 +17,13 @@ func (app *application) routes() http.Handler {
 	*/
 	mux.Handle("GET /static/", http.StripPrefix("/static", noIndexing(staticFileServer)))
 
+	// Middleware stack for our main pages
+	dynamicStack := MiddlewareChain{
+		handlers: []Middleware{
+			app.sessionManager.LoadAndSave,
+		},
+	}
+
 	/*
 	  When a route pattern ends with a trailing slash — like "/" or "/static/" — it is known as a subtree path pattern. Subtree path patterns are matched (and the corresponding handler called) whenever the start of a request URL path matches the subtree path.
 
@@ -26,22 +33,29 @@ func (app *application) routes() http.Handler {
 
 	  To prevent subtree path patterns from acting like they have a wildcard at the end, you can append the spec
 	*/
-	mux.HandleFunc("GET /{$}", app.home)
+	mux.Handle("GET /{$}", dynamicStack.ThenFunc(app.home))
 
 	/*
 	  When a pattern doesn’t have a trailing slash, it will only be matched (and the corresponding handler called) when the request URL path exactly matches the pattern in full.
 	*/
-	mux.HandleFunc("GET /snippet/view/{id}", app.snippetView)
-	mux.HandleFunc("GET /snippet/create", app.snippetCreate)
-	mux.HandleFunc("POST /snippet/create", app.snippetCreatePost)
+	mux.Handle("GET /snippet/view/{id}", dynamicStack.ThenFunc(app.snippetView))
+	mux.Handle("GET /snippet/create", dynamicStack.ThenFunc(app.snippetCreate))
+	mux.Handle("POST /snippet/create", dynamicStack.ThenFunc(app.snippetCreatePost))
 
 	/*
 	  Pass the servemux as the 'next' parameter to the commonHeaders middleware.
-	   Because commonHeaders is just a function, and the function returns a http.Handler we don't need to do anything else.
+	  Because commonHeaders is just a function, and the function returns a http.Handler we don't need to do anything else.
 
 	  It’s important to know that when the last handler in the chain returns, control is passed back up the chain in the reverse direction. So when our code is being executed the flow of control actually looks like this:
 
 	  recoverPanic → logRequest → commonHeaders → servemux → application handler → servemux → commonHeaders → logRequest → recoverPanic
 	*/
-	return app.recoverPanic(app.logRequest(commonHeaders(mux)))
+	standardStack := MiddlewareChain{
+		handlers: []Middleware{
+			app.recoverPanic,
+			app.logRequest,
+			commonHeaders,
+		}}
+
+	return standardStack.Then(mux)
 }

@@ -42,6 +42,13 @@ func (app *application) routes() http.Handler {
 	mux.Handle("GET /snippet/create", dynamicStack.ThenFunc(app.snippetCreate))
 	mux.Handle("POST /snippet/create", dynamicStack.ThenFunc(app.snippetCreatePost))
 
+	// Authentication routes
+	mux.Handle("GET /user/signup", dynamicStack.ThenFunc(app.userSignup))
+	mux.Handle("POST /user/signup", dynamicStack.ThenFunc(app.userSignupPost))
+	mux.Handle("GET /user/login", dynamicStack.ThenFunc(app.userLogin))
+	mux.Handle("POST /user/login", dynamicStack.ThenFunc(app.userLoginPost))
+	mux.Handle("POST /user/logout", dynamicStack.ThenFunc(app.userLogoutPost))
+
 	/*
 	  Pass the servemux as the 'next' parameter to the commonHeaders middleware.
 	  Because commonHeaders is just a function, and the function returns a http.Handler we don't need to do anything else.

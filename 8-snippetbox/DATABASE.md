@@ -21,7 +21,7 @@ $ docker compose exec -it db psql -U dbuser -d snippetbox
 ```
 
 You will be prompted for the password: `dbpass`
-Now, inside the `psql` prompt, run the SQL commands to create the table and add the index. (Note: The database `snippetbox` already exists).
+Now, inside the `psql` prompt, run the SQL commands to create the required tables and indexes.
 
 ```sql
 -- Create a `snippets` table.
@@ -33,8 +33,26 @@ CREATE TABLE snippets (
     expires TIMESTAMPTZ NOT NULL
 );
 
--- Add an index on the created column.
 CREATE INDEX idx_snippets_created ON snippets(created);
+
+-- Create a `sessions` table.
+CREATE TABLE sessions (
+    token CHAR(43) PRIMARY KEY,
+    data BYTEA NOT NULL,
+    expiry TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX sessions_expiry_idx ON sessions (expiry);
+
+-- Create a `users` table.
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NOT NULL UNIQUE, -- Define UNIQUE constraint inline
+    hashed_password CHAR(60) NOT NULL,  -- Suitable for bcrypt hashes
+    created TIMESTAMPTZ NOT NULL       -- Use TIMESTAMPTZ for consistency
+);
+-- Note: The UNIQUE constraint on email also automatically creates an index on that column.
 ```
 
 Insert the placeholder data using PostgreSQL's `CURRENT_TIMESTAMP` and interval syntax:
@@ -68,15 +86,19 @@ INSERT INTO snippets (title, content, created, expires) VALUES (
 For security, your web application should not connect as the `dbuser` (which is a superuser). Create a dedicated role with limited permissions. Stay in the same `psql` session (connected as `dbuser`).
 
 ```sql
--- Create a new role named 'web' that can log in and has a password.
--- Important: Replace 'your_strong_password' with a secure password for your application.
+-- Create application role
 CREATE ROLE web WITH LOGIN PASSWORD 'pass';
 
--- Grant specific privileges on the snippets table to the 'web' role.
+-- Grant privileges on the snippets table and its sequence
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE snippets TO web;
-
--- Grant usage permission on the sequence used by the 'id' column.
 GRANT USAGE, SELECT ON SEQUENCE snippets_id_seq TO web;
+
+-- Grant privileges on the sessions table
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE sessions TO web;
+
+-- NEW: Grant privileges on the users table and its sequence
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE users TO web;
+GRANT USAGE, SELECT ON SEQUENCE users_id_seq TO web;
 ```
 
 Exit the `psql` session:
@@ -100,8 +122,10 @@ Enter the password you set for `web`: `pass`
 Test the permissions:
 
 ```sql
--- This SELECT should work
+-- These SELECT should work
 SELECT id, title, expires FROM snippets;
+INSERT INTO sessions (token, data, expiry) VALUES ('test_token_abc123', E'\\xDEADBEEF'::bytea, CURRENT_TIMESTAMP + INTERVAL '1 day');
+SELECT token FROM sessions WHERE token = 'test_token_abc123';
 ```
 
 ```sh
@@ -114,8 +138,9 @@ SELECT id, title, expires FROM snippets;
 ```
 
 ```sql
--- This DROP should fail (as expected)
+-- These should fail (as expected)
 DROP TABLE snippets;
+DELETE FROM sessions WHERE token = 'test_token_abc123';
 ```
 
 ```sh

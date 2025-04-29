@@ -18,14 +18,9 @@ Now you need to connect to the running PostgreSQL instance inside the container 
 ```bash
 # Connect to the 'snippetbox' database as 'dbuser' inside the 'db' container
 $ docker compose exec -it db psql -U dbuser -d snippetbox
-# You will be prompted for the password: dbpass
-Password for user dbuser: dbpass
-psql (Your PostgreSQL Version)
-Type "help" for help.
-
-snippetbox=#
 ```
 
+You will be prompted for the password: `dbpass`
 Now, inside the `psql` prompt, run the SQL commands to create the table and add the index. (Note: The database `snippetbox` already exists).
 
 ```sql
@@ -87,7 +82,7 @@ GRANT USAGE, SELECT ON SEQUENCE snippets_id_seq TO web;
 Exit the `psql` session:
 
 ```sql
-snippetbox=# \q
+\q
 ```
 
 **4. Test the Application User**
@@ -98,20 +93,18 @@ Connect as `web` using `docker compose exec`:
 
 ```bash
 # Connect to 'snippetbox' as 'web' inside the 'db' container, prompt for password
-$ docker compose exec -it db psql -U web -d snippetbox -W
-# Enter the password you set for 'web' ('your_strong_password')
-Password:
-psql (Your PostgreSQL Version)
-Type "help" for help.
-
-snippetbox=>
+docker compose exec -it db psql -U web -d snippetbox -W
 ```
 
+Enter the password you set for `web`: `pass`
 Test the permissions:
 
 ```sql
 -- This SELECT should work
-snippetbox=> SELECT id, title, expires FROM snippets;
+SELECT id, title, expires FROM snippets;
+```
+
+```sh
   id |         title          |             expires
 ----+------------------------+-----------------------------------
   1 | An old silent pond     | 2026-04-28 18:05:00.123456+00  -- Example Timestamps
@@ -122,12 +115,15 @@ snippetbox=> SELECT id, title, expires FROM snippets;
 
 ```sql
 -- This DROP should fail (as expected)
-snippetbox=> DROP TABLE snippets;
+DROP TABLE snippets;
+```
+
+```sh
 ERROR:  permission denied for table snippets
 ```
 
 Exit `psql`:
 
 ```sql
-snippetbox=> \q
+\q
 ```

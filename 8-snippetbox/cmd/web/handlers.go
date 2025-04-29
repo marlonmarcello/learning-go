@@ -112,11 +112,51 @@ func (app *application) snippetCreatePost(w http.ResponseWriter, r *http.Request
 }
 
 func (app *application) userSignup(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintln(w, "Display sign up")
+	data := app.newTemplateData(r, userSignupTemplateData{})
+	app.render(w, r, http.StatusOK, "signup.tmpl.html", data)
 }
 
 func (app *application) userSignupPost(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintln(w, "Post user and create")
+	var templateData userSignupTemplateData
+
+	err := app.decodePostForm(r, &templateData)
+	if err != nil {
+		app.clientError(w, http.StatusBadRequest)
+		return
+	}
+
+	templateData.CheckField(validator.NotBlank(templateData.Name), "name", "This field cannot be blank")
+	templateData.CheckField(validator.NotBlank(templateData.Email), "email", "This field cannot be blank")
+	templateData.CheckField(validator.Matches(templateData.Email, validator.EmailRX), "email", "This field must be a valid email")
+	templateData.CheckField(validator.NotBlank(templateData.Password), "password", "This field cannot be blank")
+	templateData.CheckField(validator.MinChars(templateData.Password, 8), "password", "This field must be at least 8 characters")
+
+	if !templateData.Valid() {
+		data := app.newTemplateData(r, templateData)
+
+		app.render(w, r, http.StatusUnprocessableEntity, "signup.tmpl.html", data)
+
+		return
+	}
+
+	_, err = app.users.Insert(templateData.Name, templateData.Email, templateData.Password)
+	if err != nil {
+		if errors.Is(err, models.ErrDuplicateEmail) {
+			templateData.AddFormError("email", "Email address already in use")
+
+			data := app.newTemplateData(r, templateData)
+
+			app.render(w, r, http.StatusUnprocessableEntity, "signup.tmpl.html", data)
+		} else {
+			app.serverError(w, r, err)
+		}
+
+		return
+	}
+
+	app.sessionManager.Put(r.Context(), "flash", "Your signup was successful. Please log in.")
+
+	http.Redirect(w, r, "/user/login", http.StatusSeeOther)
 }
 
 func (app *application) userLogin(w http.ResponseWriter, r *http.Request) {

@@ -12,11 +12,16 @@ import (
 	  https://www.alexedwards.net/blog/validation-snippets-for-go
 */
 type Validator struct {
-	FormErrors map[string]string
+	FormErrors     map[string]string
+	NonFieldErrors []string
 }
 
 func (v *Validator) Valid() bool {
-	return len(v.FormErrors) == 0
+	return len(v.FormErrors) == 0 && len(v.NonFieldErrors) == 0
+}
+
+func (v *Validator) AddNonFieldError(message string) {
+	v.NonFieldErrors = append(v.NonFieldErrors, message)
 }
 
 func (v *Validator) AddFormError(key, message string) {

@@ -13,9 +13,10 @@ import (
 )
 
 type rootTemplateData struct {
-	CurrentYear  int
-	FlashMessage string
-	PageData     any
+	CurrentYear     int
+	FlashMessage    string
+	PageData        any
+	IsAuthenticated bool
 }
 
 // The serverError helper writes a log entry at Error level (including the request method and URI as attributes), then sends a generic 500 Internal Server Error response to the user.
@@ -66,9 +67,10 @@ func (app *application) render(w http.ResponseWriter, r *http.Request, status in
 
 func (app *application) newTemplateData(r *http.Request, x any) rootTemplateData {
 	return rootTemplateData{
-		CurrentYear:  time.Now().Year(),
-		FlashMessage: app.sessionManager.PopString(r.Context(), "flash"),
-		PageData:     x,
+		CurrentYear:     time.Now().Year(),
+		FlashMessage:    app.sessionManager.PopString(r.Context(), "flash"),
+		PageData:        x,
+		IsAuthenticated: app.isAuthenticated(r),
 	}
 }
 
@@ -114,4 +116,8 @@ func (app *application) decodePostForm(r *http.Request, destination any) error {
 	}
 
 	return nil
+}
+
+func (app *application) isAuthenticated(r *http.Request) bool {
+	return app.sessionManager.Exists(r.Context(), "authenticatedUserId")
 }

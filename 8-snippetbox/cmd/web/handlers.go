@@ -160,13 +160,68 @@ func (app *application) userSignupPost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *application) userLogin(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintln(w, "Display login form")
+	data := app.newTemplateData(r, userLoginTemplateData{})
+	app.render(w, r, http.StatusOK, "login.tmpl.html", data)
 }
 
 func (app *application) userLoginPost(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintln(w, "Authenticate user")
+	var templateData userLoginTemplateData
+
+	err := app.decodePostForm(r, &templateData)
+	if err != nil {
+		app.clientError(w, http.StatusBadRequest)
+		return
+	}
+
+	templateData.CheckField(validator.NotBlank(templateData.Email), "email", "This field cannot be blank")
+	templateData.CheckField(validator.Matches(templateData.Email, validator.EmailRX), "email", "This field must be a valid email")
+	templateData.CheckField(validator.NotBlank(templateData.Password), "password", "This field cannot be blank")
+
+	if !templateData.Valid() {
+		data := app.newTemplateData(r, templateData)
+		app.render(w, r, http.StatusUnprocessableEntity, "login.tmpl.html", data)
+		return
+	}
+
+	id, err := app.users.Authenticate(templateData.Email, templateData.Password)
+	if err != nil {
+		if errors.Is(err, models.ErrInvalidCredentials) {
+			templateData.AddNonFieldError("Email or password is incorrect")
+			data := app.newTemplateData(r, templateData)
+			app.render(w, r, http.StatusUnprocessableEntity, "login.tmpl.html", data)
+		} else {
+			app.serverError(w, r, err)
+		}
+		return
+	}
+
+	// Use the RenewToken() method on the current session to change the session
+	// ID. It's good practice to generate a new session ID when the
+	// authentication state or privilege levels changes for the user (e.g. login
+	// and logout operations).
+	err = app.sessionManager.RenewToken(r.Context())
+	if err != nil {
+		app.serverError(w, r, err)
+		return
+	}
+
+	// Add the ID of the current user to the session, so that they are now
+	// 'logged in'.
+	app.sessionManager.Put(r.Context(), "authenticatedUserId", id)
+
+	http.Redirect(w, r, "/snippet/create", http.StatusSeeOther)
 }
 
 func (app *application) userLogoutPost(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintln(w, "Logout the user")
+	err := app.sessionManager.RenewToken(r.Context())
+	if err != nil {
+		app.serverError(w, r, err)
+		return
+	}
+
+	app.sessionManager.Remove(r.Context(), "authenticatedUserId")
+
+	app.sessionManager.Put(r.Context(), "flash", "You logged out successfully")
+
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }

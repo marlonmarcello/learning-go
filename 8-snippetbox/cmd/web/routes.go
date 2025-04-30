@@ -18,11 +18,15 @@ func (app *application) routes() http.Handler {
 	mux.Handle("GET /static/", http.StripPrefix("/static", noIndexing(staticFileServer)))
 
 	// Middleware stack for our main pages
-	dynamicStack := MiddlewareChain{
-		handlers: []Middleware{
-			app.sessionManager.LoadAndSave,
-		},
-	}
+	dynamicStack := MiddlewareChain{}
+	dynamicStack.Append(app.sessionManager.LoadAndSave)
+
+	// Create a protected stack. Start by copying handlers from the dynamic stack,
+	// then append the authentication middleware.
+	// This ensures session is loaded *before* checking authentication.
+	protectedStack := MiddlewareChain{}
+	protectedStack.Append(dynamicStack.handlers...)
+	protectedStack.Append(app.requireAuthentication)
 
 	/*
 	  When a route pattern ends with a trailing slash — like "/" or "/static/" — it is known as a subtree path pattern. Subtree path patterns are matched (and the corresponding handler called) whenever the start of a request URL path matches the subtree path.
@@ -38,16 +42,16 @@ func (app *application) routes() http.Handler {
 	/*
 	  When a pattern doesn’t have a trailing slash, it will only be matched (and the corresponding handler called) when the request URL path exactly matches the pattern in full.
 	*/
-	mux.Handle("GET /snippet/view/{id}", dynamicStack.ThenFunc(app.snippetView))
-	mux.Handle("GET /snippet/create", dynamicStack.ThenFunc(app.snippetCreate))
-	mux.Handle("POST /snippet/create", dynamicStack.ThenFunc(app.snippetCreatePost))
-
-	// Authentication routes
 	mux.Handle("GET /user/signup", dynamicStack.ThenFunc(app.userSignup))
 	mux.Handle("POST /user/signup", dynamicStack.ThenFunc(app.userSignupPost))
 	mux.Handle("GET /user/login", dynamicStack.ThenFunc(app.userLogin))
 	mux.Handle("POST /user/login", dynamicStack.ThenFunc(app.userLoginPost))
-	mux.Handle("POST /user/logout", dynamicStack.ThenFunc(app.userLogoutPost))
+
+	// Protected routes - includes session + auth check
+	mux.Handle("GET /snippet/view/{id}", protectedStack.ThenFunc(app.snippetView))
+	mux.Handle("GET /snippet/create", protectedStack.ThenFunc(app.snippetCreate))
+	mux.Handle("POST /snippet/create", protectedStack.ThenFunc(app.snippetCreatePost))
+	mux.Handle("POST /user/logout", protectedStack.ThenFunc(app.userLogoutPost))
 
 	/*
 	  Pass the servemux as the 'next' parameter to the commonHeaders middleware.

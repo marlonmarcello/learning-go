@@ -38,6 +38,13 @@ type userSignupTemplateData struct {
 	validator.Validator `form:"-"`
 }
 
+type userLoginTemplateData struct {
+	Email    string `form:"email"`
+	Password string `form:"password"`
+
+	validator.Validator `form:"-"`
+}
+
 // template functions can take as many arguments as they need but MUST return a single value, UNLESS the second value is an error
 func humanDate(t time.Time) string {
 	return t.Format("02 jan 2006 at 15:04")

@@ -113,6 +113,9 @@ func main() {
 	}
 
 	tlsConfig := &tls.Config{
+		// Sets min version to 1.3, this rules out any older browser that don't support the SameSite cookie attribute so we can avoid CSRF attacks and more
+		MinVersion: tls.VersionTLS13,
+
 		// Go supports a few elliptic curves, but as of Go 1.23 only tls.CurveP256 and tls.X25519 have assembly implementations. The others are very CPU intensive, so omitting them helps ensure that our server will remain performant under heavy loads.
 		CurvePreferences: []tls.CurveID{tls.X25519, tls.CurveP256},
 

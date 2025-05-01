@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/go-playground/form/v4"
+	"github.com/justinas/nosurf"
 )
 
 type rootTemplateData struct {
@@ -17,6 +18,7 @@ type rootTemplateData struct {
 	FlashMessage    string
 	PageData        any
 	IsAuthenticated bool
+	CsrfToken       string
 }
 
 // The serverError helper writes a log entry at Error level (including the request method and URI as attributes), then sends a generic 500 Internal Server Error response to the user.
@@ -71,6 +73,7 @@ func (app *application) newTemplateData(r *http.Request, x any) rootTemplateData
 		FlashMessage:    app.sessionManager.PopString(r.Context(), "flash"),
 		PageData:        x,
 		IsAuthenticated: app.isAuthenticated(r),
+		CsrfToken:       nosurf.Token(r),
 	}
 }
 
@@ -119,5 +122,10 @@ func (app *application) decodePostForm(r *http.Request, destination any) error {
 }
 
 func (app *application) isAuthenticated(r *http.Request) bool {
-	return app.sessionManager.Exists(r.Context(), "authenticatedUserId")
+	isAuthenticated, ok := r.Context().Value(isAuthenticatedContextKey).(bool)
+	if !ok {
+		return false
+	}
+
+	return isAuthenticated
 }

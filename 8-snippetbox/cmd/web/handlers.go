@@ -207,7 +207,7 @@ func (app *application) userLoginPost(w http.ResponseWriter, r *http.Request) {
 
 	// Add the ID of the current user to the session, so that they are now
 	// 'logged in'.
-	app.sessionManager.Put(r.Context(), "authenticatedUserId", id)
+	app.sessionManager.Put(r.Context(), authenticatedUserIDSessionKey, id)
 
 	http.Redirect(w, r, "/snippet/create", http.StatusSeeOther)
 }
@@ -219,7 +219,7 @@ func (app *application) userLogoutPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	app.sessionManager.Remove(r.Context(), "authenticatedUserId")
+	app.sessionManager.Remove(r.Context(), authenticatedUserIDSessionKey)
 
 	app.sessionManager.Put(r.Context(), "flash", "You logged out successfully")
 

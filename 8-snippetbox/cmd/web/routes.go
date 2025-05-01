@@ -19,7 +19,7 @@ func (app *application) routes() http.Handler {
 
 	// Middleware stack for our main pages
 	dynamicStack := MiddlewareChain{}
-	dynamicStack.Append(app.sessionManager.LoadAndSave)
+	dynamicStack.Append(app.sessionManager.LoadAndSave, app.noSurf, app.authenticate)
 
 	// Create a protected stack. Start by copying handlers from the dynamic stack,
 	// then append the authentication middleware.

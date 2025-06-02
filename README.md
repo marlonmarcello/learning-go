@@ -7,4 +7,4 @@
 - [5. Terminal game using TCell](./5-terminal-game/)
 - [6. Basic REST CRUD api](./6-basic-crud/)
 - [7. [WIP] Social Media App](./7-social-media-app/)
-- [8. [WIP] Snippetbox (pastebin like)](./8-snippetbox/)
+- [8. Snippetbox (pastebin like) Let's Go Course](./8-snippetbox/)
